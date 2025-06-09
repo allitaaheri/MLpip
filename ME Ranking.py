@@ -145,12 +145,14 @@ from tensorflow.keras.optimizers import Adam
 from tensorflow.keras.callbacks import EarlyStopping
 
 nn_model = Sequential([
-    Dense(64, activation='relu', input_shape=(X_train_scaled.shape[1],)),
-    Dropout(0.3533316113774422),
+    Dense(128, activation='relu', input_shape=(X_train_scaled.shape[1],)),
+    Dropout(0.3),
+    Dense(64, activation='relu'),
+    Dropout(0.2),
     Dense(32, activation='relu'),
-    Dropout(0.10179447781466523),
-    Dense(16, activation='linear'),
-    Dense(1)
+    Dropout(0.1),
+    Dense(16, activation='relu'),
+    Dense(1, activation='sigmoid')
 ])
 
 nn_model.compile(
@@ -159,7 +161,7 @@ nn_model.compile(
     metrics=['accuracy']
 )
 
-early_stop_best = EarlyStopping(monitor='val_loss')
+early_stop_best = EarlyStopping(monitor='val_loss', patience=20, restore_best_weights=True)
 
 history = nn_model.fit(
     X_train_scaled, y_train,
