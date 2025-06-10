@@ -102,11 +102,8 @@ for col in log_transform_cols:
 
 from sklearn.metrics import roc_curve
 
-# Determine best threshold for the best NN model
-fpr_nn, tpr_nn, thresholds_nn = roc_curve(### FIX CODE HERE)
-best_thresh_nn = thresholds_nn[(tpr_nn - fpr_nn).argmax()]
-# Print the best threshold for the best NN model
-print(f"Best threshold for the best NN model: {best_thresh_nn}")
+# Z-score threshold for outlier removal
+threshold_zscore = 3
 
 X = data[numerical_features]
 y = data['Label']
@@ -114,8 +111,7 @@ y = data['Label']
 from scipy.stats import zscore
 
 z_scores = np.abs(zscore(X))
-threshold = best_thresh_nn
-non_outliers = (z_scores < threshold).all(axis=1)
+non_outliers = (z_scores < threshold_zscore).all(axis=1)
 
 # Apply filter
 X = X[non_outliers]
@@ -148,13 +144,15 @@ from tensorflow.keras.layers import Dense, Dropout
 from tensorflow.keras.optimizers import Adam
 from tensorflow.keras.callbacks import EarlyStopping
 
-best_nn_model = Sequential([
-    Dense(64, activation='relu', input_shape=(X_train_scaled.shape[1],)),
-    Dropout(0.3533316113774422),
+nn_model = Sequential([
+    Dense(128, activation='relu', input_shape=(X_train_scaled.shape[1],)),
+    Dropout(0.3),
+    Dense(64, activation='relu'),
+    Dropout(0.2),
     Dense(32, activation='relu'),
-    Dropout(0.10179447781466523),
-    Dense(16, activation='linear'),
-    Dense(1)
+    Dropout(0.1),
+    Dense(16, activation='relu'),
+    Dense(1, activation='sigmoid')
 ])
 
 nn_model.compile(
@@ -163,7 +161,7 @@ nn_model.compile(
     metrics=['accuracy']
 )
 
-early_stop_best = EarlyStopping(monitor='val_loss')
+early_stop_best = EarlyStopping(monitor='val_loss', patience=20, restore_best_weights=True)
 
 history = nn_model.fit(
     X_train_scaled, y_train,
@@ -177,11 +175,15 @@ history = nn_model.fit(
   # Predict probabilities
 nn_proba = nn_model.predict(X_test_scaled).flatten()
 
+# Determine best threshold based on ROC curve
+fpr_nn, tpr_nn, thresholds_nn = roc_curve(y_test, nn_proba)
+best_thresh_nn = thresholds_nn[(tpr_nn - fpr_nn).argmax()]
+
 # Final prediction using best threshold
-y_pred_final_nn = (nn_proba >= threshold).astype(int)
+y_pred_final_nn = (nn_proba >= best_thresh_nn).astype(int)
 auc_nn = roc_auc_score(y_test, nn_proba)
 
-print(f"Neural Net Best Threshold: {threshold:.2f}")
+print(f"Best threshold for the neural network: {best_thresh_nn:.2f}")
 print(f"Neural Net Accuracy: {accuracy_score(y_test, y_pred_final_nn):.4f}")
 print(f"Neural Net AUC: {auc_nn:.4f}")
 print("\nNeural Net Confusion Matrix:")
@@ -202,7 +204,7 @@ plt.grid(True)
 plt.show()
 
 # Reconstruct prediction labels using the best threshold
-best_pred = (y_proba >= threshold).astype(int)
+best_pred = (nn_proba >= best_thresh_nn).astype(int)
 
 # Create a copy of the test portion of the original data
 summary_df = data.iloc[y_test.index].copy()
